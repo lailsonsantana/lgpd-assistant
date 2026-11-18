@@ -19,18 +19,6 @@ LIMIAR_DISTANCIA_CONHECIMENTO = 0.20
 
 def iniciar_persona_assistente(conhecimento):
     persona = [
-        
-        {
-            "type": "user_input",
-            "content": [{
-                "type": "text",
-                "text": (
-                    "Quando o usuário cumprimentar ou perguntar quem é você, identifique-se como "
-                    f"{NOME_ESPECIALISTA}, informe que você é um especialista na LGPD "
-                    "para pequenas empresas e profissionais autônomos e pergunte como pode ajudar."
-                )
-            }]
-        },
         {
             "type": "user_input",
             "content": [{
@@ -152,6 +140,26 @@ def normalizar_texto(texto):
 
     texto = unicodedata.normalize("NFD", texto.lower())
     return "".join(caractere for caractere in texto if unicodedata.category(caractere) != "Mn")
+
+def mensagem_e_saudacao(mensagem):
+    texto = normalizar_texto(mensagem)
+    texto = " ".join(
+        parte.strip("!?,.;:") for parte in texto.split()
+    ).strip()
+    return texto in {
+        "oi",
+        "ola",
+        "oi tudo bem",
+        "ola tudo bem",
+        "bom dia",
+        "boa tarde",
+        "boa noite",
+        "e ai",
+        "quem e voce",
+        "quem e vc",
+        "quem voce e",
+        "quem vc e",
+    }
 
 def pergunta_sobre_classificacao(mensagem):
     texto = normalizar_texto(mensagem)
@@ -278,6 +286,15 @@ async def executar():
             "type": "user_input",
             "content": [{ "type": "text", "text": mensagem }]
         })
+
+        if mensagem_e_saudacao(mensagem):
+            resposta = (
+                f"Olá! Eu sou o {NOME_ESPECIALISTA}, um especialista na LGPD "
+                "para pequenas empresas e profissionais autônomos. Como posso ajudar?"
+            )
+            persona.append({"type": "model_output", "text": resposta})
+            print(f"🤖 {resposta}")
+            continue
 
         pergunta_classificacao = pergunta_sobre_classificacao(mensagem)
         if not pergunta_classificacao:
