@@ -47,11 +47,18 @@ def buscar_cache(pergunta, modelo_cache, colecao_cache):
             include = ["metadatas", "distances"]
         )
 
-        distancias = resultados["distances"][0]
-        metadados = resultados["metadatas"][0]
+        distancias = resultados.get("distances") or []
+        metadados = resultados.get("metadatas") or []
+        if (
+            not distancias
+            or not metadados
+            or not distancias[0]
+            or not metadados[0]
+        ):
+            return encontrada, resposta
 
-        distancia = distancias[0]
-        resposta = metadados[0].get("resposta")
+        distancia = distancias[0][0]
+        resposta = metadados[0][0].get("resposta")
 
         encontrada = resposta is not None and distancia <= LIMIAR_DISTANCIA_CACHE
     except Exception as e:

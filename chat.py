@@ -3,6 +3,7 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession
 from cache import *
 from llm import *
+from julgamento import iniciar_persona_julgamento, julgar_resposta
 import asyncio
 import json
 
@@ -90,6 +91,17 @@ def iniciar_persona_assistente(conhecimento):
     })
 
     return persona
+
+async def exibir_julgamento(llm, julgador, pergunta, resposta, referencia=None):
+    try:
+        resultado = await julgar_resposta(
+            llm, julgador, pergunta, referencia, resposta
+        )
+    except (RuntimeError, ValueError) as erro:
+        print(f"⚖️ Julgamento indisponível: {erro}")
+        return
+
+    print(f"⚖️  Julgamento: {resultado}")
 
 async def carregar_conhecimento(base_conhecimento = BASE_CONHECIMENTO):
     carregado, conhecimento = False, []
@@ -265,6 +277,7 @@ async def executar():
         normalize_embeddings=True
     )
     persona = iniciar_persona_assistente(conhecimento)
+    julgador = iniciar_persona_julgamento()
 
 
     while True:
@@ -298,6 +311,9 @@ async def executar():
                 )
                 persona.append({"type": "model_output", "text": resposta})
                 print(f"🤖 {resposta}")
+                await exibir_julgamento(
+                    llm, julgador, mensagem, resposta
+                )
                 continue
 
             encontrada, resposta_cache = buscar_cache(
@@ -313,6 +329,9 @@ async def executar():
 
             persona.append({"type": "model_output", "text": resposta})
             print(f"🤖 {resposta} [resposta da {origem}]")
+            await exibir_julgamento(
+                llm, julgador, mensagem, resposta, resposta_base
+            )
             continue
 
         ferramenta_classificacao_disponivel = any(
@@ -325,9 +344,13 @@ async def executar():
             )
             persona.append({"type": "model_output", "text": resposta})
             print(f"🤖 {resposta}")
+            await exibir_julgamento(
+                llm, julgador, mensagem, resposta
+            )
             continue
 
         ferramentas_executadas = False
+        referencia_julgamento = None
 
         while True:
             sucesso, resposta = await obter_resposta(
@@ -370,6 +393,13 @@ async def executar():
                             ))
 
                     resposta = "\n".join(respostas)
+                    referencias = [
+                        resultado["text"]
+                        for resultado in resultados_ferramentas
+                        if not resultado["is_error"]
+                    ]
+                    if referencias:
+                        referencia_julgamento = "\n".join(referencias)
                     persona.append({"type": "model_output", "text": resposta})
                     break
                 continue
@@ -383,6 +413,9 @@ async def executar():
 
         origem = "MCP" if ferramentas_executadas else "consulta MCP"
         print(f"🤖 {resposta} [resposta baseada na {origem}]")
+        await exibir_julgamento(
+            llm, julgador, mensagem, resposta, referencia_julgamento
+        )
 
     await contexto.aclose()
 
